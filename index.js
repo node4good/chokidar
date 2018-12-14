@@ -13,7 +13,6 @@ var normalizePath = require('normalize-path');
 var upath = require('upath');
 
 var NodeFsHandler = require('./lib/nodefs-handler');
-var FsEventsHandler = require('./lib/fsevents-handler');
 
 var arrify = function(value) {
   if (value == null) return [];
@@ -86,7 +85,7 @@ function FSWatcher(_opts) {
   if (undef('useFsEvents')) opts.useFsEvents = !opts.usePolling;
 
   // If we can't use fsevents, ensure the options reflect it's disabled.
-  if (!FsEventsHandler.canUse()) opts.useFsEvents = false;
+  opts.useFsEvents = false;
 
   // Use polling on Mac if not using fsevents.
   // Other platforms use non-polling fs.watch.
@@ -637,25 +636,19 @@ FSWatcher.prototype.add = function(paths, _origAdd, _internal) {
     }
   }, this);
 
-  if (this.options.useFsEvents && FsEventsHandler.canUse()) {
-    if (!this._readyCount) this._readyCount = paths.length;
-    if (this.options.persistent) this._readyCount *= 2;
-    paths.forEach(this._addToFsEvents, this);
-  } else {
-    if (!this._readyCount) this._readyCount = 0;
-    this._readyCount += paths.length;
-    asyncEach(paths, function(path, next) {
-      this._addToNodeFs(path, !_internal, 0, 0, _origAdd, function(err, res) {
-        if (res) this._emitReady();
-        next(err, res);
-      }.bind(this));
-    }.bind(this), function(error, results) {
-      results.forEach(function(item) {
-        if (!item || this.closed) return;
-        this.add(sysPath.dirname(item), sysPath.basename(_origAdd || item));
-      }, this);
+  if (!this._readyCount) this._readyCount = 0;
+  this._readyCount += paths.length;
+  asyncEach(paths, function(path, next) {
+    this._addToNodeFs(path, !_internal, 0, 0, _origAdd, function(err, res) {
+      if (res) this._emitReady();
+      next(err, res);
     }.bind(this));
-  }
+  }.bind(this), function(error, results) {
+    results.forEach(function(item) {
+      if (!item || this.closed) return;
+      this.add(sysPath.dirname(item), sysPath.basename(_origAdd || item));
+    }, this);
+  }.bind(this));
 
   return this;
 };
@@ -727,7 +720,6 @@ function importHandler(handler) {
   });
 }
 importHandler(NodeFsHandler);
-if (FsEventsHandler.canUse()) importHandler(FsEventsHandler);
 
 // Export FSWatcher class
 exports.FSWatcher = FSWatcher;
