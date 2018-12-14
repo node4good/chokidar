@@ -5,6 +5,7 @@ node_js:
   - '10'
 os:
   - osx
+  - windows
+  - linux
 script:
   - npm run test
-sudo: false
